@@ -182,9 +182,9 @@ void BattlescapeGame::handleAI(BattleUnit *unit)
 	}
 	AggroBAIState *aggro = dynamic_cast<AggroBAIState*>(ai);
 	
-	if ((unit->getStats()->psiSkill
+	// psionic or blaster launcher units may attack remotely
+	if (unit->getStats()->psiSkill
 		|| (unit->getMainHandWeapon() && unit->getMainHandWeapon()->getRules()->isWaypoint()))
-		&& _save->getExposedUnits()->size() > 0 && RNG::generate(0,100) > 66)
 	{
 		aggro = new AggroBAIState(_save, unit);
 		unit->setAIState(aggro);
@@ -193,6 +193,7 @@ void BattlescapeGame::handleAI(BattleUnit *unit)
 	}
 
 	BattleAction action;
+	action.diff = _parentState->getGame()->getSavedGame()->getDifficulty();
 	unit->think(&action);
 	
 	if (action.type == BA_RETHINK)
@@ -221,6 +222,7 @@ void BattlescapeGame::handleAI(BattleUnit *unit)
 		if (action.type == BA_MINDCONTROL || action.type == BA_PANIC)
 		{
 			action.weapon = new BattleItem(_parentState->getGame()->getRuleset()->getItem("ALIEN_PSI_WEAPON"), _save->getCurrentItemId());
+			action.TU = action.weapon->getRules()->getTUUse();
 		}
 
 		ss.clear();
@@ -486,6 +488,12 @@ void BattlescapeGame::checkForCasualties(BattleItem *murderweapon, BattleUnit *m
 			if (murderweapon)
 			{
 				statePushNext(new UnitDieBState(this, (*j), murderweapon->getRules()->getDamageType(), false));
+				if (Options::getBool("battleNotifyDeath") && (*j)->getFaction() == FACTION_PLAYER && (*j)->getOriginalFaction() == FACTION_PLAYER)
+				{
+					std::wstringstream ss;
+					ss << (*j)->getName(_parentState->getGame()->getLanguage()) << L'\n' << "has been killed";
+					_parentState->getGame()->pushState(new InfoboxState(_parentState->getGame(), ss.str()));
+				}
 			}
 			else
 			{
@@ -500,6 +508,12 @@ void BattlescapeGame::checkForCasualties(BattleItem *murderweapon, BattleUnit *m
 					{
 						// terrain explosion
 						statePushNext(new UnitDieBState(this, (*j), DT_HE, false));
+						if (Options::getBool("battleNotifyDeath") && (*j)->getFaction() == FACTION_PLAYER && (*j)->getOriginalFaction() == FACTION_PLAYER)
+						{
+							std::wstringstream ss;
+							ss << (*j)->getName(_parentState->getGame()->getLanguage()) << L'\n' << "has been killed";
+							_parentState->getGame()->pushState(new InfoboxState(_parentState->getGame(), ss.str()));
+						}
 					}
 					else
 					{
@@ -1110,6 +1124,17 @@ void BattlescapeGame::primaryAction(const Position &pos)
 				statePushBack(new ProjectileFlyBState(this, _currentAction));
 				if (getTileEngine()->psiAttack(&_currentAction))
 				{
+					// show a little infobox if it's successful
+					std::wstringstream ss;
+					if (_currentAction.type == BA_PANIC)
+					{
+						ss << _save->getTile(_currentAction.target)->getUnit()->getName(_parentState->getGame()->getLanguage()) << L'\n' << _parentState->getGame()->getLanguage()->getString("STR_HAS_PANICKED");
+					}
+					else if (_currentAction.type == BA_MINDCONTROL)
+					{
+						ss << _parentState->getGame()->getLanguage()->getString("STR_MIND_CONTROL_SUCCESSFUL");
+					}
+					_parentState->getGame()->pushState(new InfoboxState(_parentState->getGame(), ss.str()));
 					_parentState->updateSoldierInfo();
 					_currentAction.targeting = false;
 					_currentAction.type = BA_NONE;

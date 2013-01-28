@@ -55,6 +55,8 @@ UnitDieBState::UnitDieBState(BattlescapeGame *parent, BattleUnit *unit, ItemDama
 	}
 	else
 	{
+		if (_unit->getFaction() == FACTION_PLAYER)
+			_parent->getMap()->setUnitDying(true);
 		_parent->getMap()->getCamera()->centerOnPosition(_unit->getPosition());
 		_parent->setStateInterval(BattlescapeState::DEFAULT_ANIM_SPEED);
 		_originalDir = _unit->getDirection();
@@ -118,6 +120,7 @@ void UnitDieBState::think()
 
 	if (_unit->getStatus() == STATUS_DEAD || _unit->getStatus() == STATUS_UNCONSCIOUS)
 	{
+		_parent->getMap()->setUnitDying(false);
 		if (!_unit->getVisibleUnits()->empty())
 		{
 			_unit->clearVisibleUnits();
@@ -137,8 +140,11 @@ void UnitDieBState::think()
 		if (_unit->getSpecialAbility() == SPECAB_EXPLODEONDEATH)
 		{
 			_unit->instaKill();
-			Position p = Position(_unit->getPosition().x * 16, _unit->getPosition().y * 16, _unit->getPosition().z * 24);
-			_parent->statePushNext(new ExplosionBState(_parent, p, 0, _unit, 0));
+			if (_damageType != DT_STUN && _damageType != DT_HE)
+			{
+				Position p = Position(_unit->getPosition().x * 16, _unit->getPosition().y * 16, _unit->getPosition().z * 24);
+				_parent->statePushNext(new ExplosionBState(_parent, p, 0, _unit, 0));
+			}
 		}
 	}
 

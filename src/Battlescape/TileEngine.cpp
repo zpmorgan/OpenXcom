@@ -992,7 +992,14 @@ int TileEngine::unitOpensDoor(BattleUnit *unit, bool rClick)
 			if ((unit->getDirection() == 2 || unit->getDirection() == 1 || unit->getDirection() == 3) && door == -1) // east, northeast or southeast
 			{
 				tile = _save->getTile(unit->getPosition() + Position(x,y,0) + Position(1, 0, 0));
-				if (tile) door = tile->openDoor(MapData::O_WESTWALL, unit, _save->getDebugMode());
+				if (tile)
+				{
+					door = tile->openDoor(MapData::O_WESTWALL, unit, _save->getDebugMode());
+				}
+				else
+				{
+					tile = _save->getTile(unit->getPosition() + Position(x,y,0));
+				}
 				if (door == 0 && rClick)
 					TUCost = tile->getTUCost(MapData::O_NORTHWALL, unit->getArmor()->getMovementType());
 				if (door == 1)
@@ -1012,7 +1019,14 @@ int TileEngine::unitOpensDoor(BattleUnit *unit, bool rClick)
 			if ((unit->getDirection() == 4 || unit->getDirection() == 5 || unit->getDirection() == 3) && door == -1) // south, southwest or southeast
 			{
 				tile = _save->getTile(unit->getPosition() + Position(x,y,0) + Position(0, 1, 0));
-				if (tile) door = tile->openDoor(MapData::O_NORTHWALL, unit, _save->getDebugMode());
+				if (tile)
+				{
+					door = tile->openDoor(MapData::O_NORTHWALL, unit, _save->getDebugMode());
+				}
+				else
+				{
+					tile = _save->getTile(unit->getPosition() + Position(x,y,0));
+				}
 				if (door == 0 && rClick)
 					TUCost = tile->getTUCost(MapData::O_WESTWALL, unit->getArmor()->getMovementType());
 				if (door == 1)
@@ -1371,13 +1385,13 @@ bool TileEngine::psiAttack(BattleAction *action)
 {
 	BattleUnit *victim = _save->getTile(action->target)->getUnit();
 	double attackStrength = action->actor->getStats()->psiStrength * action->actor->getStats()->psiSkill / 50;
-	double defenseStrength = victim->getStats()->psiStrength + (victim->getStats()->psiSkill / 5);
+	double defenseStrength = victim->getStats()->psiStrength + 30 + (victim->getStats()->psiSkill / 5);
 	int d = distance(action->actor->getPosition(), action->target);
-	int random100 = RNG::generate(0,99);
-
+	attackStrength -= d/2;
+	attackStrength += RNG::generate(0,55);
 	if (action->type == BA_PANIC)
 	{
-		if (100 / 56 * (45 + attackStrength - defenseStrength - d) > random100)
+		if (attackStrength > defenseStrength)
 		{
 			action->actor->addPsiExp();
 			action->actor->addPsiExp();
@@ -1395,7 +1409,7 @@ bool TileEngine::psiAttack(BattleAction *action)
 	}
 	else if (action->type == BA_MINDCONTROL)
 	{
-		if (100 / 56 * (25 + attackStrength - defenseStrength - d) > random100)
+		if (attackStrength > defenseStrength)
 		{
 			action->actor->addPsiExp();
 			action->actor->addPsiExp();
@@ -1404,8 +1418,7 @@ bool TileEngine::psiAttack(BattleAction *action)
 			calculateFOV(victim);
 			if (action->actor->getFaction() == FACTION_PLAYER)
 				_save->setSelectedUnit(victim);
-			else
-				victim->setTimeUnits(victim->getStats()->tu);
+			victim->setTimeUnits(victim->getStats()->tu);
 			return true;
 		}
 		else
@@ -1450,27 +1463,68 @@ Tile *TileEngine::applyItemGravity(Tile *t)
 	return rt;
 }
 /*
- * Validate the melee range.
+ * Validate the melee range between two units.
+ * @param *unit the attacking unit.
+ * @param *target the unit we want to attack.
  * @return true when range is valid.
  */
 bool TileEngine::validMeleeRange(BattleUnit *unit, BattleUnit *target)
 {
+	return validMeleeRange(unit->getPosition(), unit->getDirection(), unit->getArmor()->getSize(), unit->getHeight(), target);
+}
+
+/*
+ * Validate the melee range between a tile and a unit.
+ * @param pos Position to check from.
+ * @param direction direction to check, -1 for all.
+ * @param size for large units, we have to do extra checks.
+ * @param height units on stairs might protrude into the tile above.
+ * @param *target the unit we want to attack, 0 for any unit.
+ * @return true when range is valid.
+ */
+bool TileEngine::validMeleeRange(Position pos, int direction, int size, int height, BattleUnit *target)
+{
 	Position p;
-	Pathfinding::directionToVector(unit->getDirection(), &p);
-	for (int x = 0; x <= unit->getArmor()->getSize(); ++x)
+	
+	if (direction == -1)
 	{
-		for (int y = 0; y <= unit->getArmor()->getSize(); ++y)
+		for (int dir = 0; dir <= 7; ++dir)
 		{
-			Tile * tile (_save->getTile(Position(unit->getPosition() + Position(x, y, 0) + p)));
-			if (tile)
+			Pathfinding::directionToVector(dir, &p);
+			for (int x = 0; x <= size-1; ++x)
 			{
-				if (unit->getHeight() + _save->getTile(unit->getPosition() + Position(x, y, 0))->getTerrainLevel() > 24 && tile->getUnit() && tile->getUnit() != target)
-					tile = _save->getTile(tile->getPosition() + Position(0, 0, 1));
-				if (tile->getUnit() && tile->getUnit() == target)
+				for (int y = 0; y <= size-1; ++y)
 				{
-					for (std::vector<BattleUnit*>::iterator b = unit->getVisibleUnits()->begin(); b != unit->getVisibleUnits()->end(); ++b)
+					Tile * tile (_save->getTile(Position(pos + Position(x, y, 0) + p)));
+					if (tile)
 					{
-						if (*b == target && !_save->getPathfinding()->isBlocked(_save->getTile(unit->getPosition() + Position(x, y, 0)), tile, unit->getDirection()))
+						if (height - _save->getTile(pos)->getTerrainLevel() > 24 && ((tile->getUnit() && tile->getUnit() != target) || !tile->getUnit()))
+							tile = _save->getTile(tile->getPosition() + Position(0, 0, 1));
+						if (tile->getUnit() && ((target != 0 && tile->getUnit() == target ) || (target == 0)))
+						{
+							if (!_save->getPathfinding()->isBlocked(_save->getTile(pos + Position(x, y, 0)), tile, dir, 0))
+								return true;
+						}
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		Pathfinding::directionToVector(direction, &p);
+		for (int x = 0; x <= size-1; ++x)
+		{
+			for (int y = 0; y <= size-1; ++y)
+			{
+				Tile * tile (_save->getTile(Position(pos + Position(x, y, 0) + p)));
+				if (tile)
+				{
+					if (height - _save->getTile(pos)->getTerrainLevel() > 24 && ((tile->getUnit() && tile->getUnit() != target) || !tile->getUnit()))
+						tile = _save->getTile(tile->getPosition() + Position(0, 0, 1));
+					if (tile->getUnit() && ((target != 0 && tile->getUnit() == target ) || (target == 0)))
+					{
+						if (!_save->getPathfinding()->isBlocked(_save->getTile(pos + Position(x, y, 0)), tile, direction, 0))
 							return true;
 					}
 				}
@@ -1479,7 +1533,6 @@ bool TileEngine::validMeleeRange(BattleUnit *unit, BattleUnit *target)
 	}
 	return false;
 }
-
 /*
  * AI: Check for windows.
  * @return direction or -1 when no window found

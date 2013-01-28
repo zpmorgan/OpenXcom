@@ -381,18 +381,18 @@ UnitStatus BattleUnit::getStatus() const
  */
 void BattleUnit::startWalking(int direction, const Position &destination, Tile *destinationTile, bool cache)
 {
-	if (direction < Pathfinding::DIR_UP)
-	{
-		_direction = direction;
-		_status = STATUS_WALKING;
-	}
-	else
+	if (direction >= Pathfinding::DIR_UP && _armor->getMovementType() == MT_FLY)
 	{
 		_verticalDirection = direction;
 		_status = STATUS_FLYING;
 	}
+	else
+	{
+		_direction = direction;
+		_status = STATUS_WALKING;
+	}
 
-	if (!_tile->getMapData(MapData::O_FLOOR) || (direction >= Pathfinding::DIR_UP && !destinationTile->getMapData(MapData::O_FLOOR)))
+	if ((!_tile->getMapData(MapData::O_FLOOR) || (direction >= Pathfinding::DIR_UP && !destinationTile->getMapData(MapData::O_FLOOR))) && _armor->getMovementType() == MT_FLY)
 	{
 		_status = STATUS_FLYING;
 		_floating = true;
@@ -578,7 +578,8 @@ void BattleUnit::turn(bool turret)
 		if (_direction > 7) _direction = 0;
 		if (_directionTurret < 0) _directionTurret = 7;
 		if (_directionTurret > 7) _directionTurret = 0;
-		_cacheInvalid = true;
+		if (_visible || _faction == FACTION_PLAYER)
+			_cacheInvalid = true;
 	}
 
 	if (turret)
@@ -651,7 +652,7 @@ void BattleUnit::setCache(Surface *cache, int part)
  */
 Surface *BattleUnit::getCache(bool *invalid, int part) const
 {
-        if (part < 0) part = 0;
+	if (part < 0) part = 0;
 	*invalid = _cacheInvalid;
 	return _cache[part];
 }
@@ -695,7 +696,8 @@ void BattleUnit::aim(bool aiming)
 	else
 		_status = STATUS_STANDING;
 
-	_cacheInvalid = true;
+	if (_visible || _faction == FACTION_PLAYER)
+		_cacheInvalid = true;
 }
 
 /**
@@ -1460,7 +1462,7 @@ void BattleUnit::setTile(Tile *tile)
 	_tile = tile;
 
 	// unit could have changed from flying to walking or vice versa
-	if (_status == STATUS_WALKING && !_tile->getMapData(MapData::O_FLOOR))
+	if (_status == STATUS_WALKING && !_tile->getMapData(MapData::O_FLOOR) && _armor->getMovementType() == MT_FLY)
 	{
 		_status = STATUS_FLYING;
 		_floating = true;

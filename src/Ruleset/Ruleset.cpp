@@ -188,7 +188,7 @@ void Ruleset::loadFile(const std::string &filename)
 	std::ifstream fin(filename.c_str());
 	if (!fin)
 	{
-		throw Exception("Failed to load ruleset");
+		throw Exception(filename + " not found");
 	}
 	YAML::Parser parser(fin);
 	YAML::Node doc;
@@ -832,6 +832,7 @@ SavedGame *Ruleset::newSave() const
 	ids["STR_UFO"] = 1;
 	ids["STR_WAYPOINT"] = 1;
 	ids["STR_TERROR_SITE"] = 1;
+	ids["STR_ALIEN_BASE"] = 1;
 	ids["STR_SOLDIER"] = 1;
 	ids["ALIEN_MISSIONS"] = 1;
 	save->initIds(ids);
