@@ -147,6 +147,7 @@ void BattlescapeGenerator::setAlienItemlevel(int alienItemLevel)
 void BattlescapeGenerator::setBase(Base *base)
 {
 	_base = base;
+	_base->setInBattlescape(true);
 }
 
 /**
@@ -382,7 +383,7 @@ void BattlescapeGenerator::run()
 			{
 				// only put items in the battlescape that make sense (when the item got a sprite, it's probably ok)
 				RuleItem *rule = _game->getRuleset()->getItem(i->first);
-				if (rule->getBigSprite() > -1 && rule->getBattleType() != BT_NONE && rule->getBattleType() != BT_CORPSE && !rule->isFixed())
+				if (rule->getBigSprite() > -1 && rule->getBattleType() != BT_NONE && rule->getBattleType() != BT_CORPSE && !rule->isFixed() && _game->getSavedGame()->isResearched(rule->getRequirements()))
 				{
 					for (int count=0; count < i->second; count++)
 					{
