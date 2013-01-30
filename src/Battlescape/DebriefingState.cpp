@@ -505,7 +505,16 @@ void DebriefingState::prepareDebriefing()
 				{
 					std::stringstream ss;
 					ss << "STR_" << (*j)->getType();
-					base->getItems()->addItem(ss.str(), 1);
+					if (status == STATUS_UNCONSCIOUS)
+					{
+						base->getItems()->addItem(ss.str(), 1);
+					} else
+					{
+						// imprint new loyalty!
+						Soldier *defector = new Soldier(_game->getRuleset()->getSoldier("XCOM"), (*j), (std::wstring)_game->getLanguage()->getString(ss.str()), _game->getSavedGame()->getId("STR_SOLDIER"));
+						// new Soldier(_game->getRuleset()->getSoldier("XCOM"), _game->getRuleset()->getArmor("STR_NONE_UC"), &_game->getRuleset()->getPools(), _game->getSavedGame()->getId("STR_SOLDIER"));
+						base->getSoldiers()->push_back(defector);
+					}
 				}
 				else
 				{

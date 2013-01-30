@@ -31,6 +31,7 @@
 #include "../Engine/RNG.h"
 #include "../Ruleset/RuleInventory.h"
 #include "../Ruleset/RuleSoldier.h"
+#include "../Ruleset/Ruleset.h"
 #include "Tile.h"
 #include "SavedGame.h"
 
@@ -42,16 +43,19 @@ namespace OpenXcom
  * @param soldier Pointer to the Soldier.
  * @param faction Which faction the units belongs to.
  */
-BattleUnit::BattleUnit(Soldier *soldier, UnitFaction faction) : _faction(faction), _originalFaction(faction), _killedBy(faction), _id(0), _pos(Position()), _tile(0), _lastPos(Position()), _direction(0), _directionTurret(0), _toDirectionTurret(0),  _verticalDirection(0), _status(STATUS_STANDING), _walkPhase(0), _fallPhase(0), _kneeled(false), _floating(false), _dontReselect(false), _fire(0), _currentAIState(0), _visible(false), _cacheInvalid(true), _expBravery(0), _expReactions(0), _expFiring(0), _expThrowing(0), _expPsiSkill(0), _expMelee(0), _turretType(-1), _motionPoints(0), _kills(0), _geoscapeSoldier(soldier), _charging(0), _turnsExposed(0)
+BattleUnit::BattleUnit(Soldier *soldier, UnitFaction faction, Ruleset *rule) : _faction(faction), _originalFaction(faction), _killedBy(faction), _id(0), _pos(Position()), _tile(0), _lastPos(Position()), _direction(0), _directionTurret(0), _toDirectionTurret(0),  _verticalDirection(0), _status(STATUS_STANDING), _walkPhase(0), _fallPhase(0), _kneeled(false), _floating(false), _dontReselect(false), _fire(0), _currentAIState(0), _visible(false), _cacheInvalid(true), _expBravery(0), _expReactions(0), _expFiring(0), _expThrowing(0), _expPsiSkill(0), _expMelee(0), _turretType(-1), _motionPoints(0), _kills(0), _geoscapeSoldier(soldier), _charging(0), _turnsExposed(0)
 {
 	_name = soldier->getName();
 	_id = soldier->getId();
 	_type = "SOLDIER";
 	_rank = soldier->getRankString();
 	_stats = *soldier->getCurrentStats();
-	_standHeight = soldier->getRules()->getStandHeight();
-	_kneelHeight = soldier->getRules()->getKneelHeight();
-	_loftemps = soldier->getRules()->getLoftemps();
+	if (soldier->getRules())
+	{
+		_standHeight = soldier->getRules()->getStandHeight();
+		_kneelHeight = soldier->getRules()->getKneelHeight();
+		_loftemps = soldier->getRules()->getLoftemps();
+	}
 	_deathSound = 0; // this one is hardcoded
 	_aggroSound = 0;
 	_moveSound = -1;  // this one is hardcoded
@@ -61,6 +65,21 @@ BattleUnit::BattleUnit(Soldier *soldier, UnitFaction faction) : _faction(faction
 	_armor = soldier->getArmor();
 	_gender = soldier->getGender();
 	_faceDirection = -1;
+	
+	if (soldier->getType() != "" && soldier->getType() != "SOLDIER")
+	{
+		_type = soldier->getType();
+		Unit *unit = rule->getUnit(_type);
+		
+		_standHeight = unit->getStandHeight();
+		_kneelHeight = unit->getKneelHeight();
+		_loftemps = unit->getLoftemps();
+		_deathSound = unit->getDeathSound();
+		_aggroSound = unit->getAggroSound();
+		_moveSound = unit->getMoveSound();
+		_zombieUnit = unit->getZombieUnit();
+		_specab = (SpecialAbility) unit->getSpecialAbility();		
+	}
 
 	int rankbonus = 0;
 
