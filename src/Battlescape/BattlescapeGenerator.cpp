@@ -347,7 +347,7 @@ void BattlescapeGenerator::run()
 			if ((*i)->getCraft() == _craft ||
 				(_craft == 0 && (*i)->getWoundRecovery() == 0 && ((*i)->getCraft() == 0 || (*i)->getCraft()->getStatus() != "STR_OUT")))
 			{
-				unit = addXCOMUnit(new BattleUnit(*i, FACTION_PLAYER));
+				unit = addXCOMUnit(new BattleUnit(*i, FACTION_PLAYER, _game->getRuleset()));
 				if (!_save->getSelectedUnit())
 					_save->setSelectedUnit(unit);
 			}

@@ -37,6 +37,7 @@ class RuleSoldier;
 class Armor;
 class Language;
 class EquipmentLayoutItem;
+class BattleUnit;
 
 /**
  * Represents a soldier hired by the player.
@@ -47,6 +48,7 @@ class Soldier
 {
 private:
 	std::wstring _name;
+	std::string _type; // "" or "SOLDIER" for humans, else non-human defector
 	int _id, _improvement;
 	RuleSoldier *_rules;
 	UnitStats _initialStats, _currentStats;
@@ -61,6 +63,8 @@ private:
 public:
 	/// Creates a new soldier.
 	Soldier(RuleSoldier *rules, Armor *armor, const std::vector<SoldierNamePool*> *names = 0, int id = 0);
+	/// Promotes a BattleUnit to a soldier for any recruitments in the field...
+	Soldier(RuleSoldier *rules, BattleUnit *bu, std::wstring name, int id);
 	/// Cleans up the soldier.
 	~Soldier();
 	/// Loads the soldier from YAML.
@@ -127,6 +131,8 @@ public:
 	void setPsiTraining();
 	/// returns this soldier's psionic improvement score for this month.
 	int getImprovement();
+	/// returns base creature type
+	std::string &getType() { return _type; };
 };
 
 }

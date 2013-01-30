@@ -26,6 +26,7 @@
 #include "../Ruleset/RuleItem.h"
 #include "../Ruleset/Unit.h"
 #include "../Ruleset/MapData.h"
+#include "../Ruleset/Ruleset.h"
 #include "Soldier.h"
 
 namespace OpenXcom
@@ -109,7 +110,7 @@ private:
 public:
 	static const int MAX_SOLDIER_ID = 1000000;
 	/// Creates a BattleUnit.
-	BattleUnit(Soldier *soldier, UnitFaction faction);
+	BattleUnit(Soldier *soldier, UnitFaction faction, Ruleset *rule);
 	BattleUnit(Unit *unit, UnitFaction faction, int id, Armor *armor);
 	/// Cleans up the BattleUnit.
 	virtual ~BattleUnit();

@@ -40,6 +40,7 @@
 #include "../Ruleset/Armor.h"
 #include "UnitInfoState.h"
 #include "TileEngine.h"
+#include "../Engine/Logger.h"
 
 namespace OpenXcom
 {
@@ -163,7 +164,13 @@ void InventoryState::init()
 		{
 			look = s->getArmor()->getSpriteInventory() + ".SPK";
 		}
-		_game->getResourcePack()->getSurface(look)->blit(_soldier);
+		if (CrossPlatform::fileExists(CrossPlatform::getDataFile("UFOGRAPH/" + look)))
+		{		
+			_game->getResourcePack()->getSurface(look)->blit(_soldier);			
+		} else 
+		{
+			Log(LOG_WARNING) << "Missing armor sprite.";
+		}
 	}
 	if (_tu)
 	{
