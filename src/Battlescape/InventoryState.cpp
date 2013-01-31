@@ -130,6 +130,7 @@ InventoryState::~InventoryState()
  */
 void InventoryState::init()
 {
+	std::string look;
 	BattleUnit *unit = _battleGame->getSelectedUnit();
 
 	unit->setCache(0);
@@ -142,11 +143,12 @@ void InventoryState::init()
 	if (s)
 	{
 		SurfaceSet *texture = _game->getResourcePack()->getSurfaceSet("BASEBITS.PCK");
+		
 		texture->getFrame(s->getRankSprite())->setX(0);
 		texture->getFrame(s->getRankSprite())->setY(0);
 		texture->getFrame(s->getRankSprite())->blit(_btnRank);
 
-		std::string look = s->getArmor()->getSpriteInventory();
+		look = s->getArmor()->getSpriteInventory();
 		if (s->getGender() == GENDER_MALE)
 			look += "M";
 		else
@@ -164,14 +166,16 @@ void InventoryState::init()
 		{
 			look = s->getArmor()->getSpriteInventory() + ".SPK";
 		}
-		if (CrossPlatform::fileExists(CrossPlatform::getDataFile("UFOGRAPH/" + look)))
-		{		
-			_game->getResourcePack()->getSurface(look)->blit(_soldier);			
-		} else 
-		{
-			Log(LOG_WARNING) << "Missing armor sprite.";
-		}
+	} else look = unit->getArmor()->getSpriteInventory() + ".SPK";
+		
+	if (CrossPlatform::fileExists(CrossPlatform::getDataFile("UFOGRAPH/" + look)))
+	{		
+		_game->getResourcePack()->getSurface(look)->blit(_soldier);			
+	} else
+	{
+		Log(LOG_WARNING) << "Missing inventory armor sprite.";
 	}
+
 	if (_tu)
 	{
 		std::wstringstream ss;
