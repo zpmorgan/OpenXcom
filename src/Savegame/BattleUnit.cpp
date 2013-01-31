@@ -1930,7 +1930,7 @@ Armor *BattleUnit::getArmor() const
  */
 std::wstring BattleUnit::getName(Language *lang) const
 {
-	if (_type != "SOLDIER" && lang != 0)
+	if (_type != "SOLDIER" && lang != 0 && _originalFaction != FACTION_PLAYER)
 	{
 		std::wstringstream wss;
 		wss << lang->getString(_race.c_str()) << lang->getString(_rank.c_str());
