@@ -203,6 +203,31 @@ int Projectile::calculateTrajectory(double accuracy)
 				return -1; // still no line of fire as we can't reach the target tile due to a unit blocking
 			}
 		}
+		if (test != -1 && !_trajectory.empty() && _action.actor->getFaction() == FACTION_PLAYER && _action.autoShotCounter == 1)
+		{
+			Position hitPos = Position(_trajectory.at(0).x/16, _trajectory.at(0).y/16, _trajectory.at(0).z/24);
+			if (hitPos != _action.target && _action.result == "")
+			{
+				if (test == 2)
+				{
+					if (hitPos.y - 1 == _action.target.y)
+					{
+						_trajectory.clear();
+						return _save->getTileEngine()->calculateLine(originVoxel, targetVoxel, true, &_trajectory, bu);
+					}
+				}
+				if (test == 1)
+				{
+					if (hitPos.x - 1 == _action.target.x)
+					{
+						_trajectory.clear();
+						return _save->getTileEngine()->calculateLine(originVoxel, targetVoxel, true, &_trajectory, bu);
+					}
+				}
+				_trajectory.clear();
+				return -1;
+			}
+		}
 		_trajectory.clear();
 	}
 
