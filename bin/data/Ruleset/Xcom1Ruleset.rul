@@ -4073,7 +4073,7 @@ armors:
       - 1.0
       - 1.0
       - 1.0
-      - 1.0
+      - 0.0
   - type: REAPER_ARMOR
     spriteInv: REAPER
     spriteSheet: X_REAP.PCK
@@ -4094,7 +4094,7 @@ armors:
       - 1.0
       - 1.0
       - 1.0
-      - 1.0
+      - 0.0
   - type: SECTOPOD_ARMOR
     spriteSheet: X_ROB.PCK
     corpseItem: SECTOPOD_CORPSE_
@@ -4115,7 +4115,7 @@ armors:
       - 1.0
       - 1.0
       - 1.0
-      - 1.0
+      - 0.0
   - type: TANK_ARMOR
     spriteSheet: TANKS.PCK
     corpseItem: TANK_CORPSE_
@@ -4135,7 +4135,7 @@ armors:
       - 0.0
       - 0.9
       - 0.4
-      - 1.0
+      - 0.0
   - type: HOVERTANK_ARMOR
     spriteSheet: TANKS.PCK
     corpseItem: HOVERTANK_CORPSE_
@@ -4156,7 +4156,7 @@ armors:
       - 0.0
       - 0.9
       - 0.4
-      - 1.0
+      - 0.0
   - type: CIVM_ARMOR
     spriteInv: CIVM1
     spriteSheet: CIVM.PCK
