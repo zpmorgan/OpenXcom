@@ -598,7 +598,6 @@ Surface *XcomResourcePack::getSurface(const std::string &name)
 		{
 			Surface *loading = new Surface(320, 200);
 			// std::cout << fn << std::endl;
-			loading->clear();
 			loading->loadSpk(fn);
 			loading->setPalette(game->getScreen()->getPalette(), 0, 256);
 			_surfaces[name] = loading;
