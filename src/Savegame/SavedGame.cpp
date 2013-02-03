@@ -226,9 +226,10 @@ void SavedGame::load(const std::string &filename, Ruleset *rule)
 	doc["difficulty"] >> a;
 	_difficulty = (GameDifficulty)a;
 	RNG::load(doc);
+#define DOC(x) if(doc.FindValue((x))) doc[x]
 	doc["monthsPassed"] >> _monthsPassed;
-	doc["radarLines"] >> _radarLines;
-	doc["detail"] >> _detail;
+	DOC("radarLines") >> _radarLines;
+	DOC("radarLines") >> _detail;
 	doc["funds"] >> _funds;
 	doc["maintenance"] >> _maintenance;
 	doc["researchScores"] >> _researchScores;
