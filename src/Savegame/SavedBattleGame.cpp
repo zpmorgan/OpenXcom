@@ -508,16 +508,6 @@ int SavedBattleGame::getHeight() const
 }
 
 /**
- * This method converts coordinates into a unique index.
- * @param pos position
- * @return Unique index.
- */
-int SavedBattleGame::getTileIndex(const Position& pos) const
-{
-	return pos.z * _length * _width + pos.y * _width + pos.x;
-}
-
-/**
  * This method converts an index to coords.
  * @param index tileindex
  * @param x pointer to X coordinate.
@@ -532,19 +522,6 @@ void SavedBattleGame::getTileCoords(int index, int *x, int *y, int *z) const
 	*x = (index % (_length * _width)) % _width;
 }
 
-/**
- * Gets the Tile on a given position on the map.
- * @param pos position
- * @return Pointer to tile.
- */
-Tile *SavedBattleGame::getTile(const Position& pos) const
-{
-	if (pos.x < 0 || pos.y < 0 || pos.z < 0
-		|| pos.x >= _width || pos.y >= _length || pos.z >= _height)
-		return 0;
-
-	return _tiles[getTileIndex(pos)];
-}
 
 /**
  * Gets the currently selected unit
@@ -568,7 +545,7 @@ void SavedBattleGame::setSelectedUnit(BattleUnit *unit)
  * Select the previous player unit TODO move this to BattlescapeState ?
  * @return pointer to BattleUnit.
  */
-BattleUnit *SavedBattleGame::selectPreviousPlayerUnit()
+BattleUnit *SavedBattleGame::selectPreviousPlayerUnit(bool checkReselect)
 {
 	std::vector<BattleUnit*>::iterator i = _units.begin();
 	bool bPrev = false;
@@ -583,7 +560,8 @@ BattleUnit *SavedBattleGame::selectPreviousPlayerUnit()
 	{
 		if (bPrev && (*i)->getFaction() == _side && !(*i)->isOut())
 		{
-			break;
+			if ( !checkReselect || ((*i)->reselectAllowed()))
+				break;
 		}
 		if ((*i) == _selectedUnit)
 		{
@@ -792,9 +770,9 @@ void SavedBattleGame::endTurn()
 		if (_lastSelectedUnit && !_lastSelectedUnit->isOut())
 			_selectedUnit = _lastSelectedUnit;
 		else
-			selectPreviousPlayerUnit();
+			selectNextPlayerUnit();
 		while (_selectedUnit && _selectedUnit->getFaction() != FACTION_PLAYER)
-			selectPreviousPlayerUnit();
+			selectNextPlayerUnit();
 	}
 	
 	// hide all aliens (VOF calculations below will turn them visible again)
