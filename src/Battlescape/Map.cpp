@@ -212,7 +212,7 @@ void Map::drawTerrain(Surface *surface)
 	Tile *tile;
 	int beginX = 0, endX = _save->getWidth() - 1;
     int beginY = 0, endY = _save->getLength() - 1;
-	int beginZ = 0, endZ = _camera->getShowAllLayers()?_save->getHeight() - 1:_camera->getViewHeight()+1;
+	int beginZ = 0, endZ = _camera->getShowAllLayers()?_save->getHeight() - 1:_camera->getViewHeight();
 	bool singleLevel = !_camera->getShowAllLayers();
 	Position mapPosition, screenPosition, bulletPositionScreen;
 	int bulletLowX=16000, bulletLowY=16000, bulletLowZ=16000, bulletHighX=0, bulletHighY=0, bulletHighZ=0;
@@ -282,21 +282,15 @@ void Map::drawTerrain(Surface *surface)
 
 	surface->lock();
 
-    for (int itZ = beginZ; itZ <= endZ; itZ++)
+	for (int itZ = beginZ; itZ <= endZ; itZ++)
 	{
-        for (int itX = beginX; itX <= endX; itX++)
+		for (int itX = beginX; itX <= endX; itX++)
 		{
-            for (int itY = beginY; itY <= endY; itY++)
+			for (int itY = beginY; itY <= endY; itY++)
 			{
 				mapPosition = Position(itX, itY, itZ);
 				_camera->convertMapToScreen(mapPosition, &screenPosition);
 				screenPosition += _camera->getMapOffset();
-				if (singleLevel && itZ == endZ) //fake second level of single layered view
-				{
-					Position mapPosition2 = Position(itX, itY, itZ-1);
-					if (_save->getTile(mapPosition2) && _save->getTile(mapPosition2)->getTerrainLevel() != -24)
-						continue;
-				}
 
 				// only render cells that are inside the surface
 				if (screenPosition.x > -_spriteWidth && screenPosition.x < surface->getWidth() + _spriteWidth &&
@@ -325,7 +319,7 @@ void Map::drawTerrain(Surface *surface)
 					unit = tile->getUnit();
 
 					// Draw cursor back
-					if (_cursorType != CT_NONE && _selectorX > itX - _cursorSize && _selectorY > itY - _cursorSize && _selectorX < itX+1 && _selectorY < itY+1)
+					if (_cursorType != CT_NONE && _selectorX > itX - _cursorSize && _selectorY > itY - _cursorSize && _selectorX < itX+1 && _selectorY < itY+1 && _game->getCursor()->getY() < 144)
 					{
 						if (_camera->getViewHeight() == itZ)
 						{
@@ -446,7 +440,8 @@ void Map::drawTerrain(Surface *surface)
 										if (_projectile->getParticle(i) != 0xFF)
 										{
 											Position voxelPos = _projectile->getPosition(1-i);
-											voxelPos.z = 0;
+											Tile *floorTile = _save->getTileEngine()->applyItemGravity(tile);
+											voxelPos.z = (floorTile->getPosition().z * 24) - floorTile->getTerrainLevel();
 											if (voxelPos.x / 16 == mapPosition.x &&
 												voxelPos.y / 16 == mapPosition.y)
 											{
@@ -486,15 +481,11 @@ void Map::drawTerrain(Surface *surface)
 						{
 							Position offset;
 							calculateWalkingOffset(unit, &offset);
-							tmpSurface->blitNShade(surface, screenPosition.x + offset.x, screenPosition.y + offset.y, tileShade);
 							if (unit->getArmor()->getSize() > 1)
 							{
 								offset.y += 4;
 							}
-							if (unit == (BattleUnit*)_save->getSelectedUnit() && (_save->getSide() == FACTION_PLAYER || _save->getDebugMode()) && part == 0)
-							{
-								_arrow->blitNShade(surface, screenPosition.x + offset.x + (_spriteWidth / 2) - (_arrow->getWidth() / 2), screenPosition.y + offset.y - _arrow->getHeight() + _animFrame, 0);
-							}
+							tmpSurface->blitNShade(surface, screenPosition.x + offset.x, screenPosition.y + offset.y, tileShade);
 							if (unit->getFire() > 0)
 							{
 								frameNumber = 4 + (_animFrame / 2);
@@ -504,11 +495,12 @@ void Map::drawTerrain(Surface *surface)
 						}
 					}
 					// if we can see through the floor, draw the soldier below it if it is on stairs
-					if (itZ > 0 && tile->hasNoFloor())
+					Tile *tileBelow = _save->getTile(mapPosition + Position(0, 0, -1));
+					if (itZ > 0 && tile->hasNoFloor(tileBelow))
 					{
 						BattleUnit *tunit = _save->selectUnit(Position(itX, itY, itZ-1));
 						Tile *ttile = _save->getTile(Position(itX, itY, itZ-1));
-						if (tunit && ttile->getTerrainLevel() < 0 && ttile->isDiscovered(2))
+						if (tunit && tunit->getVisible() && ttile->getTerrainLevel() < 0 && ttile->isDiscovered(2))
 						{
 							// the part is 0 for small units, large units have parts 1,2 & 3 depending on the relative x/y position of this tile vs the actual unit position.
 							int part = 0;
@@ -540,7 +532,7 @@ void Map::drawTerrain(Surface *surface)
 					}
 
 					// Draw cursor front
-					if (_cursorType != CT_NONE && _selectorX > itX - _cursorSize && _selectorY > itY - _cursorSize && _selectorX < itX+1 && _selectorY < itY+1)
+					if (_cursorType != CT_NONE && _selectorX > itX - _cursorSize && _selectorY > itY - _cursorSize && _selectorX < itX+1 && _selectorY < itY+1 && _game->getCursor()->getY() < 144)
 					{
 						if (_camera->getViewHeight() == itZ)
 						{
@@ -623,7 +615,19 @@ void Map::drawTerrain(Surface *surface)
 			}
 		}
 	}
-
+	unit = (BattleUnit*)_save->getSelectedUnit();
+	if (unit && (_save->getSide() == FACTION_PLAYER || _save->getDebugMode()) && unit->getPosition().z <= _camera->getViewHeight())
+	{
+		_camera->convertMapToScreen(unit->getPosition(), &screenPosition);
+		screenPosition += _camera->getMapOffset();
+		Position offset;
+		calculateWalkingOffset(unit, &offset);
+		if (unit->getArmor()->getSize() > 1)
+		{
+			offset.y += 4;
+		}
+		_arrow->blitNShade(surface, screenPosition.x + offset.x + (_spriteWidth / 2) - (_arrow->getWidth() / 2), screenPosition.y + offset.y - _arrow->getHeight() + _animFrame, 0);
+	}
 	delete _numWaypid;
 
 	// check if we got big explosions
@@ -906,7 +910,7 @@ void Map::cacheUnit(BattleUnit *unit)
 	UnitSprite *unitSprite = new UnitSprite(_spriteWidth, _spriteHeight, 0, 0);
 	unitSprite->setPalette(this->getPalette());
 	bool invalid, dummy;
-	int numOfParts = unit->getArmor()->getSize() == 1?1:4;
+	int numOfParts = unit->getArmor()->getSize() == 1?1:unit->getArmor()->getSize()*2;
 
 	unit->getCache(&invalid);
 	if (invalid)

@@ -201,6 +201,8 @@ set ( engine_src
   Engine/Surface.h
   Engine/Font.cpp
   Engine/Font.h
+  Engine/OpenGL.cpp
+  Engine/OpenGL.h
   Engine/Options.cpp
   Engine/Options.h
   Engine/CrossPlatform.cpp
@@ -216,6 +218,20 @@ set ( engine_src
   Engine/LocalizedText.h
   Engine/FastLineClip.cpp
   Engine/FastLineClip.h
+  Engine/Zoom.cpp
+  Engine/Zoom.h
+  Engine/Scalers/scale2x.cpp
+  Engine/Scalers/scale2x.h
+  Engine/Scalers/scale3x.cpp
+  Engine/Scalers/scale3x.h
+  Engine/Scalers/scalebit.cpp
+  Engine/Scalers/scalebit.h
+  Engine/Scalers/common.h
+  Engine/Scalers/hqx.h
+  Engine/Scalers/hq2x.cpp
+  Engine/Scalers/hq3x.cpp
+  Engine/Scalers/hq4x.cpp
+  Engine/Scalers/init.cpp
 )
 
 set ( geoscape_src
@@ -601,7 +617,7 @@ if ( WIN32 )
   endif ()
   set ( system_libs ${basic_windows_libs} SDLmain ${static_flags} )
 endif ()
-target_link_libraries ( openxcom ${system_libs} ${SDLIMAGE_LIBRARY} ${SDLMIXER_LIBRARY} ${SDLGFX_LIBRARY} ${SDL_LIBRARY} ${YAMLCPP_LIBRARY} )
+target_link_libraries ( openxcom ${system_libs} ${SDLIMAGE_LIBRARY} ${SDLMIXER_LIBRARY} ${SDLGFX_LIBRARY} ${SDL_LIBRARY} ${YAMLCPP_LIBRARY} ${OPENGL_gl_LIBRARY} )
 
 add_custom_command ( TARGET openxcom
   POST_BUILD

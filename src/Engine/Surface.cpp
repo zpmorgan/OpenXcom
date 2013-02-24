@@ -25,6 +25,14 @@
 #include "Exception.h"
 #include "ShaderMove.h"
 #include "Logger.h"
+#include <stdlib.h>
+#ifdef _WIN32
+#include <malloc.h>
+#endif
+#if defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR)
+#define _aligned_malloc __mingw_aligned_malloc
+#define _aligned_free   __mingw_aligned_free
+#endif //MINGW
 
 namespace OpenXcom
 {
@@ -40,9 +48,29 @@ namespace OpenXcom
  * @param x X position in pixels.
  * @param y Y position in pixels.
  */
-Surface::Surface(int width, int height, int x, int y) : _x(x), _y(y), _visible(true), _hidden(false), _redraw(false), _originalColors(0)
+Surface::Surface(int width, int height, int x, int y, int bpp) : _x(x), _y(y), _visible(true), _hidden(false), _redraw(false), _originalColors(0), _misalignedPixelBuffer(0), _alignedBuffer(0)
 {
-	_surface = SDL_CreateRGBSurface(SDL_SWSURFACE, width, height, 8, 0, 0, 0, 0);
+	//_surface = SDL_CreateRGBSurface(SDL_SWSURFACE, width, height, 8, 0, 0, 0, 0);
+	int pitch = (bpp/8) * ((width+15)& ~0xF);
+
+#ifndef _WIN32
+	int rc;
+	if ((rc = posix_memalign(&_alignedBuffer, 16, pitch * height * (bpp/8))))
+	{
+		throw Exception(strerror(rc));
+	}
+#else
+	// of course Windows has to be difficult about this!
+	_alignedBuffer = _aligned_malloc(pitch*height*(bpp/8), 16);
+	if (!_alignedBuffer)
+	{
+		throw Exception("Where's the memory, Lebowski?");
+	}
+#endif
+	
+	memset(_alignedBuffer, 0, pitch * height * (bpp/8));
+	
+	_surface = SDL_CreateRGBSurfaceFrom(_alignedBuffer,width, height, bpp, pitch, 0, 0, 0, 0);
 
 	if (_surface == 0)
 	{
@@ -74,6 +102,8 @@ Surface::Surface(const Surface& other)
 	_hidden = other._hidden;
 	_redraw = other._redraw;
 	_originalColors = other._originalColors;
+	_misalignedPixelBuffer = 0;
+	_alignedBuffer = 0;
 }
 
 /**
@@ -81,6 +111,12 @@ Surface::Surface(const Surface& other)
  */
 Surface::~Surface()
 {
+	//if (_misalignedPixelBuffer) _surface->pixels = _misalignedPixelBuffer;
+#ifdef _WIN32
+	if (_alignedBuffer) _aligned_free(_alignedBuffer);
+#else
+	if (_alignedBuffer) free(_alignedBuffer);
+#endif
 	SDL_FreeSurface(_surface);
 }
 
@@ -130,8 +166,15 @@ void Surface::loadScr(const std::string &filename)
 void Surface::loadImage(const std::string &filename)
 {
 	// Destroy current surface (will be replaced)
+#ifdef _WIN32
+	if (_alignedBuffer) _aligned_free(_alignedBuffer);
+#else
+	if (_alignedBuffer) free(_alignedBuffer); 
+#endif
+	_alignedBuffer = 0;
 	SDL_FreeSurface(_surface);
 	_surface = 0;
+	_misalignedPixelBuffer = 0;
 	
 	// Load file
 	_surface = IMG_Load(filename.c_str());
@@ -215,7 +258,8 @@ void Surface::clear()
 	square.y = 0;
 	square.w = getWidth();
 	square.h = getHeight();
-	SDL_FillRect(_surface, &square, 0);
+	if (_surface->flags & SDL_SWSURFACE) memset(_surface->pixels, 0, _surface->h*_surface->pitch);
+	else SDL_FillRect(_surface, &square, 0);
 }
 
 /**

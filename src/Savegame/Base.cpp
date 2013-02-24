@@ -66,6 +66,9 @@ Base::~Base()
 	}
 	for (std::vector<Craft*>::iterator i = _crafts.begin(); i != _crafts.end(); ++i)
 	{
+		for (std::vector<Vehicle*>::iterator j = (*i)->getVehicles()->begin(); j != (*i)->getVehicles()->end(); ++j)
+			for (std::vector<Vehicle*>::iterator k = _vehicles.begin(); k != _vehicles.end(); ++k)
+				if ((*k)==(*j)) { _vehicles.erase(k); break; } // to avoid calling a vehicle's desctructor twice
 		delete *i;
 	}
 	for (std::vector<Production *>::iterator i = _productions.begin (); i != _productions.end (); ++i)
@@ -143,6 +146,19 @@ void Base::load(const YAML::Node &node, SavedGame *save, bool newGame)
 	}
 
 	_items->load(node["items"]);
+	// Some old saves have bad items, better get rid of them to avoid further bugs
+	for (std::map<std::string, int>::iterator i = _items->getContents()->begin(); i != _items->getContents()->end();)
+	{
+		if (std::find(_rule->getItemsList().begin(), _rule->getItemsList().end(), i->first) == _rule->getItemsList().end())
+		{
+			_items->getContents()->erase(i++);
+		}
+		else
+		{
+			++i;
+		}
+	}
+
 	node["scientists"] >> _scientists;
 	node["engineers"] >> _engineers;
 	node["inBattlescape"] >> _inBattlescape;
@@ -1146,14 +1162,41 @@ void Base::setupDefenses()
 		}
 	}
 
-	for (std::map<std::string, int>::iterator i = _items->getContents()->begin(); i != _items->getContents()->end(); ++i)
+	// add vehicles left on the base
+	for (std::map<std::string, int>::iterator i = _items->getContents()->begin(); i != _items->getContents()->end(); )
 	{
-		if (_rule->getItem((i)->first)->isFixed())
+		std::string itemId=(i)->first;
+		int iqty=(i)->second;
+		RuleItem *rule = _rule->getItem(itemId);
+		if (rule->isFixed())
 		{
-			std::string type = _rule->getItem((i)->first)->getType();
-			Vehicle *v = new Vehicle(_rule->getItem((i)->first), 0);
-			_vehicles.push_back(v);
+			if (rule->getClipSize() == -1) // so this vehicle does not need ammo
+			{
+				for (int j=0; j<iqty; ++j) _vehicles.push_back(new Vehicle(rule, 255));
+				_items->removeItem(itemId, iqty);
+			}
+			else // so this vehicle needs ammo
+			{
+				RuleItem *ammo = _rule->getItem(rule->getCompatibleAmmo()->front());
+				int baqty = _items->getItem(ammo->getType()); // Ammo Quantity for this vehicle-type on the base
+				if (0 >= baqty || 0 >= iqty) { ++i; continue; }
+				int canBeAdded = std::min(iqty, baqty);
+				int newAmmoPerVehicle = std::min(baqty / canBeAdded, ammo->getClipSize());;
+				int remainder = 0;
+				if (ammo->getClipSize() > newAmmoPerVehicle) remainder = baqty - (canBeAdded * newAmmoPerVehicle);
+				int newAmmo;
+				for (int j=0; j<canBeAdded; ++j)
+				{
+					newAmmo = newAmmoPerVehicle;
+					if (j<remainder) ++newAmmo;
+					_vehicles.push_back(new Vehicle(rule, newAmmo));
+					_items->removeItem(ammo->getType(), newAmmo);
+				}
+				_items->removeItem(itemId, canBeAdded);
+			}
+			i = _items->getContents()->begin(); // we have to start over because iterator is broken because of the removeItem
 		}
+		else ++i;
 	}
 }
 

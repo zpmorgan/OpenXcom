@@ -56,13 +56,23 @@ void createDefault()
 	setInt("displayWidth", 320);
 	setInt("displayHeight", 200);
 	setBool("fullscreen", true);
+	setBool("asyncBlit", false);
 	setInt("keyboardMode", KEYBOARD_OFF);
 #else
 	setInt("displayWidth", 640);
 	setInt("displayHeight", 400);
 	setBool("fullscreen", false);
+	setBool("asyncBlit", true);
 	setInt("keyboardMode", KEYBOARD_ON);
 #endif
+	setInt("baseXResolution", 320);
+	setInt("baseYResolution", 200);
+	setBool("useScaleFilter", false);
+	setBool("useHQXFilter", false);
+	setBool("useOpenGL", false);
+	setString("useOpenGLShader", "Shaders/CRT-interlaced.OpenGL.shader");
+	setBool("vSyncForOpenGL", false);
+	setBool("useOpenGLSmoothing", true);
 	setBool("debug", false);
 	setBool("debugUi", false);
 	setBool("mute", false);
@@ -79,18 +89,31 @@ void createDefault()
 	setInt("battleXcomSpeed", 30); // 40, 30, 20, 10, 5, 1
 	setInt("battleAlienSpeed", 30); // 40, 30, 20, 10, 5, 1
 	setBool("battleInstantGrenade", false); // set to true if you want to play with the alternative grenade handling
+	setInt("battleExplosionHeight", 3); //0, 1, 2, 3
 	setBool("battlePreviewPath", false); // requires double-click to confirm moves
 	setBool("battleRangeBasedAccuracy", false);
 	setBool("fpsCounter", false);
 	setBool("craftLaunchAlways", false);
 	setBool("globeSeasons", false);
+	setBool("globeAllRadarsOnBaseBuild", true);
+	setBool("allowChangeListValuesByMouseWheel", true); // It applies only for lists, not for scientists/engineers screen
+	setInt("changeValueByMouseWheel", 10);
 	setInt("audioSampleRate", 22050);
 	setInt("audioBitDepth", 16);
 	setInt("pauseMode", 0);
+	setBool("alienContainmentHasUpperLimit", false);
+	setBool("canSellLiveAliens", false);
 	setBool("customInitialBase", false);
 	setBool("aggressiveRetaliation", false);
 	setBool("strafe", false);
 	setBool("battleNotifyDeath", false);
+	setBool("allowBuildingQueue", false);
+	setBool("allowAutoSellProduction", false);
+	setBool("showFundsOnGeoscape", false);
+	setBool("showMoreStatsInInventoryView", false);
+	setBool("allowResize", false);
+	setInt("windowedModePositionX", 3);
+	setInt("windowedModePositionY", 22);
 	// controls
 	setInt("keyOk", SDLK_RETURN);
 	setInt("keyCancel", SDLK_ESCAPE);
@@ -111,7 +134,7 @@ void createDefault()
 	setInt("keyGeoIntercept", SDLK_i);
 	setInt("keyGeoBases", SDLK_b);
 	setInt("keyGeoGraphs", SDLK_g);
-	setInt("keyGeoUfopaedia", SDLK_u);
+	setInt("keyGeoUfopedia", SDLK_u);
 	setInt("keyGeoOptions", SDLK_ESCAPE);
 	setInt("keyGeoFunding", SDLK_f);
 	setInt("keyGeoToggleDetail", SDLK_TAB);
@@ -123,17 +146,22 @@ void createDefault()
 	setInt("keyBattleLevelUp", SDLK_PAGEUP);
 	setInt("keyBattleLevelDown", SDLK_PAGEDOWN);
 	setInt("keyBattleCenterUnit", SDLK_HOME);
-	setInt("keyBattleNextUnit", SDLK_TAB);
 	setInt("keyBattlePrevUnit", SDLK_LSHIFT);
-	setInt("keyBattleOptions", SDLK_ESCAPE);
-	setInt("keyBattleEndTurn", SDLK_BACKSPACE);
+	setInt("keyBattleNextUnit", SDLK_TAB);
+	setInt("keyBattleDeselectUnit", SDLK_BACKSLASH);
 	setInt("keyBattleInventory", SDLK_i);
 	setInt("keyBattleMap", SDLK_m);
-	setInt("keyBattleCrouch", SDLK_c);
-	setInt("keyBattleReload", SDLK_r);
-	setInt("keyBattlePersonalLighting", SDLK_l);
+	setInt("keyBattleOptions", SDLK_ESCAPE);
+	setInt("keyBattleEndTurn", SDLK_BACKSPACE);
 	setInt("keyBattleAbort", SDLK_a);
 	setInt("keyBattleStats", SDLK_F1);
+	setInt("keyBattleKneel", SDLK_k);
+	setInt("keyBattleReload", SDLK_r);
+	setInt("keyBattlePersonalLighting", SDLK_l);
+	setInt("keyBattleReserveNone", SDLK_F2);
+	setInt("keyBattleReserveSnap", SDLK_F3);
+	setInt("keyBattleReserveAimed", SDLK_F4);
+	setInt("keyBattleReserveAuto", SDLK_F5);
 	setInt("keyBattleCenterEnemy1", SDLK_1);
 	setInt("keyBattleCenterEnemy2", SDLK_2);
 	setInt("keyBattleCenterEnemy3", SDLK_3);
@@ -143,10 +171,6 @@ void createDefault()
 	setInt("keyBattleCenterEnemy7", SDLK_7);
 	setInt("keyBattleCenterEnemy8", SDLK_8);
 	setInt("keyBattleCenterEnemy9", SDLK_9);
-	setInt("keyBattleReserveNone", SDLK_F2);
-	setInt("keyBattleReserveSnap", SDLK_F3);
-	setInt("keyBattleReserveAimed", SDLK_F4);
-	setInt("keyBattleReserveAuto", SDLK_F5);
 
 	_rulesets.clear();
 	_rulesets.push_back("Xcom1Ruleset");

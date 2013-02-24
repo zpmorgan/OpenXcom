@@ -311,7 +311,7 @@ XcomResourcePack::XcomResourcePack() : ResourcePack()
 							 "GMTACTIC",
 							 "GMTACTIC2",
 							 "GMWIN"};
-		std::string exts[] = {"ogg", "mp3", "mod"};
+		std::string exts[] = {"flac", "ogg", "mp3", "mod"};
 		int tracks[] = {3, 6, 0, 18, -1, -1, 2, 19, 20, 21, 10, 9, 8, 12, 17, -1, 11};
 
 		// Check which music version is available
@@ -337,7 +337,7 @@ XcomResourcePack::XcomResourcePack() : ResourcePack()
 			{
 				std::stringstream s;
 				s << "SOUND/" << mus[i] << "." << exts[j];
-				if (CrossPlatform::fileExists(CrossPlatform::getDataFile(s.str()).c_str()))
+				if (CrossPlatform::fileExists(CrossPlatform::getDataFile(s.str())))
 				{
 					_musics[mus[i]] = new Music();
 					_musics[mus[i]]->load(CrossPlatform::getDataFile(s.str()));
@@ -358,7 +358,7 @@ XcomResourcePack::XcomResourcePack() : ResourcePack()
 				{
 					std::stringstream s;
 					s << "SOUND/" << mus[i] << ".mid";
-					if (CrossPlatform::fileExists(CrossPlatform::getDataFile(s.str()).c_str()))
+					if (CrossPlatform::fileExists(CrossPlatform::getDataFile(s.str())))
 					{
 						_musics[mus[i]] = new Music();
 						_musics[mus[i]]->load(CrossPlatform::getDataFile(s.str()));

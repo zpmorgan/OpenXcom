@@ -19,7 +19,6 @@
 #include "Screen.h"
 #include <sstream>
 #include <iomanip>
-#include <SDL_rotozoom.h>
 #include <SDL_endian.h>
 #include <limits.h>
 #include "../lodepng.h"
@@ -29,12 +28,32 @@
 #include "Action.h"
 #include "Options.h"
 #include "CrossPlatform.h"
+#include "Zoom.h"
+#include "OpenGL.h"
+
+
 
 namespace OpenXcom
 {
 
-const double Screen::BASE_WIDTH = 320.0;
-const double Screen::BASE_HEIGHT = 200.0;
+int Screen::BASE_WIDTH = 320;
+int Screen::BASE_HEIGHT = 200;
+
+/// Sets the _flags and _bpp variables based on game options; needed in more than one place now
+void Screen::makeVideoFlags()
+{
+	_flags = SDL_SWSURFACE|SDL_HWPALETTE;
+	if (Options::getBool("asyncBlit")) _flags |= SDL_ASYNCBLIT;
+	if (isOpenGLEnabled()) _flags = SDL_OPENGL;
+	if (Options::getBool("allowResize")) _flags |= SDL_RESIZABLE;
+	if (_fullscreen)
+	{
+		_flags |= SDL_FULLSCREEN;
+	}
+
+	_bpp = (Screen::isHQXEnabled() || Screen::isOpenGLEnabled()) ? 32 : 8;
+}
+
 
 /**
  * Initializes a new display screen for the game to render contents to.
@@ -45,17 +64,25 @@ const double Screen::BASE_HEIGHT = 200.0;
  * @warning Currently the game is designed for 8bpp, so there's no telling what'll
  * happen if you use a different value.
  */
-Screen::Screen(int width, int height, int bpp, bool fullscreen) : _bpp(bpp), _scaleX(1.0), _scaleY(1.0), _fullscreen(fullscreen)
+Screen::Screen(int width, int height, int bpp, bool fullscreen, int windowedModePositionX, int windowedModePositionY) : _bpp(bpp), _scaleX(1.0), _scaleY(1.0), _fullscreen(fullscreen), _numColors(0), _firstColor(0), _surface(0)
 {
-	_surface = new Surface((int)BASE_WIDTH, (int)BASE_HEIGHT);
-	_flags = SDL_SWSURFACE|SDL_HWPALETTE;
-	if (_fullscreen)
+	char *prev;
+	if (!_fullscreen)
 	{
-		_flags |= SDL_FULLSCREEN;
+		prev = SDL_getenv("SDL_VIDEO_WINDOW_POS");
+		if (0 == prev) prev = (char*)"";
+		std::stringstream ss;
+		ss << "SDL_VIDEO_WINDOW_POS=" << std::dec << windowedModePositionX << "," << windowedModePositionY;
+		SDL_putenv(const_cast<char*>(ss.str().c_str()));
 	}
 	setResolution(width, height);
+	if (!_fullscreen)
+	{ // We don't want to put the window back to the starting position later when the window is resized.
+		std::stringstream ss;
+		ss << "SDL_VIDEO_WINDOW_POS=" << prev;
+		SDL_putenv(const_cast<char*>(ss.str().c_str()));
+	}
 	memset(deferredPalette, 0, 256*sizeof(SDL_Color));
-	_numColors = _firstColor = 0;
 }
 
 /**
@@ -72,8 +99,9 @@ Screen::~Screen()
  * contents that need to be shown will be blitted to this.
  * @return Pointer to the buffer surface.
  */
-Surface *Screen::getSurface() const
+Surface *Screen::getSurface()
 {
+	_pushPalette = true;
 	return _surface;
 }
 
@@ -98,407 +126,11 @@ void Screen::handle(Action *action)
 			i++;
 		}
 		while (CrossPlatform::fileExists(ss.str()));
-
-		std::vector<unsigned char> image;
-		SDL_Color *palette = getPalette();
-
-		for (int y = 0; y < getHeight(); ++y)
-		{
-			for (int x = 0; x < getWidth(); ++x)
-			{
-				Uint8 color = ((Uint8 *)_screen->pixels)[y * _screen->pitch + x * _screen->format->BytesPerPixel];
-				image.push_back(palette[color].r);
-				image.push_back(palette[color].g);
-				image.push_back(palette[color].b);
-			}
-		}
-
-		unsigned error = lodepng::encode(ss.str(), image, getWidth(), getHeight(), LCT_RGB);
-		if (error)
-		{
-			Log(LOG_ERROR) << "Saving to PNG failed: " << lodepng_error_text(error);
-		}
+		screenshot(ss.str());
+		return;
 	}
 }
 
-/**
- *  Optimized 8 bit zoomer for resizing by a factor of 2. Doesn't flip.
- *  Used internally by _zoomSurfaceY() below.
- *  source and dest. widths must be multiples of 8 bytes for 64-bit access
- */
-static int zoomSurface2X_64bit(SDL_Surface *src, SDL_Surface *dst)
-{
-	Uint64 dataSrc;
-	Uint64 dataDst;
-	Uint8 *pixelSrc = (Uint8*)src->pixels;
-	Uint8 *pixelDstRow = (Uint8*)dst->pixels;
-	int sx, sy;
-	static bool proclaimed = false;
-	
-	if (!proclaimed)
-	{
-		proclaimed = true;
-		Log(LOG_INFO) << "Using somewhat fast 2X zoom routine.";
-	}
-
-	for (sy = 0; sy < src->h; ++sy, dataSrc += src->pitch, pixelDstRow += dst->pitch*2)
-	{
-		Uint64 *pixelDst = (Uint64*)pixelDstRow;
-		Uint64 *pixelDst2 = (Uint64*)(pixelDstRow + dst->pitch);	
-		for (sx = 0; sx < src->w; sx += 8, pixelSrc += 8)
-		{
-			dataSrc = *((Uint64*) pixelSrc);
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-			// boo
-			SDL_Swap64(dataSrc);
-#endif
-/* expanded form of of data shift: 
-			dataDst = (dataSrc & 0xFF) | ((dataSrc & 0xFF) << 8) | 
-				((dataSrc & 0xFF00 ) << 8) | ((dataSrc & 0xFF00)) << 16)  | 
-				((dataSrc & 0xFF0000) << 16) | ((dataSrc & 0xFF0000) << 24) |
-				((dataSrc & 0xFF000000) << 24) | ((dataSrc & 0xFF000000) << 32);
-*/
-			// compact form, combining terms with equal multipliers (shifts)
-			dataDst = (dataSrc & 0xFF) | ((dataSrc & 0xFFFF) << 8) | 
-				((dataSrc & 0xFFFF00) << 16)  | 
-				((dataSrc & 0xFFFF0000) << 24) |
-				((dataSrc & 0xFF000000) << 32);
-
-			*pixelDst = dataDst;
-			*pixelDst2 = dataDst;
-			pixelDst++; // forward 8 bytes!
-			pixelDst2++;
-			dataSrc >>= 32;
-
-			dataDst = (dataSrc & 0xFF) | ((dataSrc & 0xFFFF) << 8) | 
-				((dataSrc & 0xFFFF00) << 16)  | 
-				((dataSrc & 0xFFFF0000) << 24) |
-				((dataSrc & 0xFF000000) << 32);
-
-			*pixelDst = dataDst;
-			*pixelDst2 = dataDst;
-			pixelDst++;	// 8 bytes again		
-			pixelDst2++;
-		}
-	}
-	
-	return 0;
-}
-
-
-/**
- *  Optimized 8 bit zoomer for resizing by a factor of 2. Doesn't flip.
- *  32-bit version for sad old x86 chips which run out of registers 
- *  with the 64-bit version.
- *  Used internally by _zoomSurfaceY() below.
- *  source and dest. widths must be multiples of 4 bytes for 32-bit access
- */
-static int zoomSurface2X_32bit(SDL_Surface *src, SDL_Surface *dst)
-{
-	Uint32 dataSrc;
-	Uint32 dataDst;
-	Uint8 *pixelSrc = (Uint8*)src->pixels;
-	Uint8 *pixelDstRow = (Uint8*)dst->pixels;
-	int sx, sy;
-	static bool proclaimed = false;
-	
-	if (!proclaimed)
-	{
-		proclaimed = true;
-		Log(LOG_INFO) << "Using 32-bit 2X zoom routine.";
-	}
-
-	for (sy = 0; sy < src->h; ++sy, dataSrc += src->pitch, pixelDstRow += dst->pitch*2)
-	{
-		Uint32 *pixelDst = (Uint32*)pixelDstRow;
-		Uint32 *pixelDst2 = (Uint32*)(pixelDstRow + dst->pitch);	
-		for (sx = 0; sx < src->w; sx += 4, pixelSrc += 4)
-		{
-			dataSrc = *((Uint32*) pixelSrc);
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-			// boo
-			SDL_Swap32(dataSrc);
-#endif
-
-			dataDst = (dataSrc & 0xFF) | ((dataSrc & 0xFFFF) << 8) | 
-				((dataSrc & 0xFF00) << 16);
-
-			*pixelDst = dataDst;
-			*pixelDst2 = dataDst;
-			pixelDst++; // forward 4 bytes!
-			pixelDst2++;
-
-			dataSrc >>= 16; 
-
-			dataDst = (dataSrc & 0xFF) | ((dataSrc & 0xFFFF) << 8) | 
-				((dataSrc & 0xFF00) << 16);
-
-			*pixelDst = dataDst;
-			*pixelDst2 = dataDst;
-			pixelDst++; // forward 4 bytes!
-			pixelDst2++;
-		}
-	}
-	
-	return 0;
-}
-
-/**
- *  Optimized 8 bit zoomer for resizing by a factor of 4. Doesn't flip.
- *  Used internally by _zoomSurfaceY() below.
- *  source and dest. widths must be multiples of 8 bytes for 64-bit access
- */
-static int zoomSurface4X_64bit(SDL_Surface *src, SDL_Surface *dst)
-{
-	Uint64 dataSrc;
-	Uint64 dataDst;
-	Uint8 *pixelSrc = (Uint8*)src->pixels;
-	Uint8 *pixelDst = (Uint8*)dst->pixels;
-	int sx, sy;
-	static bool proclaimed = false;
-	
-	if (!proclaimed)
-	{
-		proclaimed = true;
-		Log(LOG_INFO) << "Using modestly fast 4X zoom routine.";
-	}
-
-	for (sy = 0; sy < src->h; ++sy, dataSrc += src->pitch, pixelDst += dst->pitch*3)
-	{
-		/* Uint8 *pixelDst = pixelDstRow;*/
-		for (sx = 0; sx < src->w; sx += 8, pixelSrc += 8)
-		{
-			dataSrc = *((Uint64*) pixelSrc);
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-			// boo
-			SDL_Swap64(dataSrc);
-#endif
-			/* expanded form of of data shift:
-			dataDst = (dataSrc & 0xFF) | ((dataSrc & 0xFF) << 8) | 
-				((dataSrc & 0xFF) << 16 | ((datasrc & 0xFF) << 24) |
-				((dataSrc & 0xFF00 ) << 24) | ((dataSrc & 0xFF00) << 32)  | 
-				((dataSrc & 0xFF00 ) << 40) | ((dataSrc & 0xFF00) << 48) ;
-				 */
-			for (int i = 0; i < 4; ++i)
-			{
-				// compact form, combining terms with equal multipliers (shifts)
-				dataDst = (dataSrc & 0xFF) | ((dataSrc & 0xFF) << 8) | 
-					((dataSrc & 0xFF) << 16) | 
-					((dataSrc & 0xFFFF ) << 24) | ((dataSrc & 0xFF00) << 32)  | 
-					((dataSrc & 0xFF00 ) << 40) | ((dataSrc & 0xFF00) << 48) ;
-
-				*((Uint64*)pixelDst) = dataDst;
-				*((Uint64*)(pixelDst + dst->pitch)) = dataDst;
-				*((Uint64*)(pixelDst + dst->pitch*2)) = dataDst;
-				*((Uint64*)(pixelDst + dst->pitch*3)) = dataDst;
-				pixelDst+=8; // forward 8 bytes!
-				dataSrc >>= 16;
-			}
-		}
-	}
-	
-	return 0;
-}
-
-
-/**
- *  Optimized 8 bit zoomer for resizing by a factor of 4. Doesn't flip.
- *  32-bit version.
- *  Used internally by _zoomSurfaceY() below.
- *  source and dest. widths must be multiples of 4 bytes for 32-bit access
- */
-static int zoomSurface4X_32bit(SDL_Surface *src, SDL_Surface *dst)
-{
-	Uint32 dataSrc;
-	Uint32 dataDst;
-	Uint8 *pixelSrc = (Uint8*)src->pixels;
-	Uint8 *pixelDstRow = (Uint8*)dst->pixels;
-	int sx, sy;
-	static bool proclaimed = false;
-	
-	if (!proclaimed)
-	{
-		proclaimed = true;
-		Log(LOG_INFO) << "Using 32-bit 4X zoom routine.";
-	}
-
-	for (sy = 0; sy < src->h; ++sy, dataSrc += src->pitch, pixelDstRow += dst->pitch*4)
-	{
-		Uint32 *pixelDst = (Uint32*)pixelDstRow;
-		Uint32 *pixelDst2 = (Uint32*)(pixelDstRow + dst->pitch);
-		Uint32 *pixelDst3 = (Uint32*)(pixelDstRow + 2*dst->pitch);
-		Uint32 *pixelDst4 = (Uint32*)(pixelDstRow + 3*dst->pitch);
-		for (sx = 0; sx < src->w; sx += 4, pixelSrc += 4)
-		{
-			dataSrc = *((Uint32*) pixelSrc);
-#if SDL_BYTEORDER == SDL_BIG_ENDIAN
-			// boo
-			SDL_Swap32(dataSrc);
-#endif
-			for (int i = 0; i < 4; ++i)
-			{
-				dataDst = (dataSrc & 0xFF) | ((dataSrc & 0xFF) << 8) | 
-					((dataSrc & 0xFF) << 16) | ((dataSrc & 0xFF ) << 24); 
-
-				*pixelDst = dataDst;
-				*pixelDst2 = dataDst;
-				*pixelDst3 = dataDst;
-				*pixelDst4 = dataDst;
-				pixelDst++; // forward 4 bytes!
-				pixelDst2++;
-				pixelDst3++;
-				pixelDst4++;
-				dataSrc >>= 8;
-			}
-		}
-	}
-	
-	return 0;
-}
-
-/**
- * Internal 8 bit Zoomer without smoothing.
- * Source code originally from SDL_gfx (LGPL) with permission by author.
- *
- * Zooms 8bit palette/Y 'src' surface to 'dst' surface.
- * Assumes src and dst surfaces are of 8 bit depth.
- * Assumes dst surface was allocated with the correct dimensions.
- *
- * @param src The surface to zoom (input).
- * @param dst The zoomed surface (output).
- * @param flipx Flag indicating if the image should be horizontally flipped.
- * @param flipy Flag indicating if the image should be vertically flipped.
- * @return 0 for success or -1 for error.
- */
-int Screen::_zoomSurfaceY(SDL_Surface * src, SDL_Surface * dst, int flipx, int flipy)
-{
-	int x, y;
-	static Uint32 *sax, *say;
-	Uint32 *csax, *csay;
-	int csx, csy;
-	Uint8 *sp, *dp, *csp;
-	int dgap;
-	static bool proclaimed = false;
-	
-// if we're scaling by a factor of 2 or 4, try to use a more efficient function	
-
-	if (src->format->BytesPerPixel == 1 && dst->format->BytesPerPixel == 1)
-	{
-// __WORDSIZE is defined on Linux, SIZE_MAX on Windows
-#if defined(__WORDSIZE) && (__WORDSIZE == 64) || defined(SIZE_MAX) && (SIZE_MAX > 0xFFFFFFFF)
-		if (dst->w == src->w * 2 && dst->h == src->h * 2) return  zoomSurface2X_64bit(src, dst);
-		else if (dst->w == src->w * 4 && dst->h == src->h * 4) return  zoomSurface4X_64bit(src, dst);
-#else
-		if (sizeof(void *) == 8)
-		{
-			if (dst->w == src->w * 2 && dst->h == src->h * 2) return  zoomSurface2X_64bit(src, dst);
-			else if (dst->w == src->w * 4 && dst->h == src->h * 4) return  zoomSurface4X_64bit(src, dst);
-		}
-		else
-		{
-			if (dst->w == src->w * 2 && dst->h == src->h * 2) return  zoomSurface2X_32bit(src, dst);
-			else if (dst->w == src->w * 4 && dst->h == src->h * 4) return  zoomSurface4X_32bit(src, dst);
-		}
-#endif
-	}
-	
-	if (!proclaimed)
-	{
-		Log(LOG_INFO) << "Using slower scaling routine. For best results, try a resolution of 640x400 or 1280x800.";
-	}
-	
-	/*
-	* Allocate memory for row increments
-	*/
-	if ((sax = (Uint32 *) realloc(sax, (dst->w + 1) * sizeof(Uint32))) == NULL) {
-		sax = 0;
-		return (-1);
-	}
-	if ((say = (Uint32 *) realloc(say, (dst->h + 1) * sizeof(Uint32))) == NULL) {
-		say = 0;
-		//free(sax);
-		return (-1);
-	}
-
-	/*
-	* Pointer setup
-	*/
-	sp = csp = (Uint8 *) src->pixels;
-	dp = (Uint8 *) dst->pixels;
-	dgap = dst->pitch - dst->w;
-
-	if (flipx) csp += (src->w-1);
-	if (flipy) csp  = ( (Uint8*)csp + src->pitch*(src->h-1) );
-
-	/*
-	* Precalculate row increments
-	*/
-	csx = 0;
-	csax = sax;
-	for (x = 0; x < dst->w; x++) {
-		csx += src->w;
-		*csax = 0;
-		while (csx >= dst->w) {
-			csx -= dst->w;
-			(*csax)++;
-		}
-		(*csax) *= (flipx ? -1 : 1);
-		csax++;
-	}
-	csy = 0;
-	csay = say;
-	for (y = 0; y < dst->h; y++) {
-		csy += src->h;
-		*csay = 0;
-		while (csy >= dst->h) {
-			csy -= dst->h;
-			(*csay)++;
-		}
-		(*csay) *= src->pitch * (flipy ? -1 : 1);
-		csay++;
-	}
-	/*
-	* Draw
-	*/
-	csay = say;
-	for (y = 0; y < dst->h; y++) {
-		csax = sax;
-		sp = csp;
-		for (x = 0; x < dst->w; x++) {
-			/*
-			* Draw
-			*/
-			*dp = *sp;
-			/*
-			* Advance source pointers
-			*/
-			sp += (*csax);
-			csax++;
-			/*
-			* Advance destination pointer
-			*/
-			dp++;
-		}
-		/*
-		* Advance source pointer (for row)
-		*/
-		csp += (*csay);
-		csay++;
-
-		/*
-		* Advance destination pointers
-		*/
-		dp += dgap;
-	}
-
-	/*
-	* Never remove temp arrays
-	*/
-	//free(sax);
-	//free(say);
-
-	return 0;
-}
 
 /**
  * Renders the buffer's contents onto the screen, applying
@@ -509,9 +141,9 @@ int Screen::_zoomSurfaceY(SDL_Surface * src, SDL_Surface * dst, int flipx, int f
  */
 void Screen::flip()
 {
-	if (getWidth() != BASE_WIDTH || getHeight() != BASE_HEIGHT)
+	if (getWidth() != BASE_WIDTH || getHeight() != BASE_HEIGHT || isOpenGLEnabled())
 	{
-		_zoomSurfaceY(_surface->getSurface(), _screen, 0, 0);
+		Zoom::flipWithZoom(_surface->getSurface(), _screen, &glOutput);
 	}
 	else
 	{
@@ -519,15 +151,18 @@ void Screen::flip()
 	}
 
 	// perform any requested palette update
-	if (_numColors)
+	if (_pushPalette && _numColors && _screen->format->BitsPerPixel == 8)
 	{
-		if (SDL_SetColors(_screen, &(deferredPalette[_firstColor]), _firstColor, _numColors) == 0)
+		if (_screen->format->BitsPerPixel == 8 && SDL_SetColors(_screen, &(deferredPalette[_firstColor]), _firstColor, _numColors) == 0)
 		{
 			Log(LOG_ERROR) << "Display palette doesn't match requested palette";
 		}
 		_numColors = 0;
+		_pushPalette = false;
 	}
 
+
+	
 	if (SDL_Flip(_screen) == -1)
 	{
 		throw Exception(SDL_GetError());
@@ -540,12 +175,6 @@ void Screen::flip()
 void Screen::clear()
 {
 	_surface->clear();
-	SDL_Rect square;
-	square.x = 0;
-	square.y = 0;
-	square.w = getWidth();
-	square.h = getHeight();
-	SDL_FillRect(_screen, &square, 0);
 }
 
 /**
@@ -560,12 +189,12 @@ void Screen::setPalette(SDL_Color* colors, int firstcolor, int ncolors)
 	{
 		// an initial palette setup has not been comitted to the screen yet
 		// just update it with whatever colors are being sent now
-		memcpy(&(deferredPalette[firstcolor]), colors, sizeof(SDL_Color)*ncolors);
+		memmove(&(deferredPalette[firstcolor]), colors, sizeof(SDL_Color)*ncolors);
 		_numColors = 256; // all the use cases are just a full palette with 16-color follow-ups
 		_firstColor = 0;
 	} else
 	{
-		memcpy(&(deferredPalette[firstcolor]), colors, sizeof(SDL_Color) * ncolors);
+		memmove(&(deferredPalette[firstcolor]), colors, sizeof(SDL_Color) * ncolors);
 		_numColors = ncolors;
 		_firstColor = firstcolor;
 	}
@@ -600,10 +229,9 @@ void Screen::setPalette(SDL_Color* colors, int firstcolor, int ncolors)
  * Returns the screen's 8bpp palette.
  * @return Pointer to the palette's colors.
  */
-SDL_Color *Screen::getPalette()
+SDL_Color *Screen::getPalette() const
 {
-	return &(deferredPalette[0]);
-	//return _surface->getPalette();
+	return (SDL_Color*)deferredPalette;
 }
 
 /**
@@ -632,16 +260,40 @@ int Screen::getHeight() const
  */
 void Screen::setResolution(int width, int height)
 {
-	_scaleX = width / BASE_WIDTH;
-	_scaleY = height / BASE_HEIGHT;
+	makeVideoFlags();
+
+	if (!_surface || (_surface && 
+		(_surface->getSurface()->format->BitsPerPixel != _bpp || 
+		_surface->getSurface()->w != BASE_WIDTH ||
+		_surface->getSurface()->h != BASE_HEIGHT))) // don't reallocate _surface if not necessary, it's a waste of CPU cycles
+	{
+		if (_surface) delete _surface;
+		_surface = new Surface((int)BASE_WIDTH, (int)BASE_HEIGHT, 0, 0, _bpp);
+	}
+	SDL_SetColorKey(_surface->getSurface(), 0, 0); // turn off color key! 
+
+	_scaleX = width / (double)BASE_WIDTH;
+	_scaleY = height / (double)BASE_HEIGHT;
 	Log(LOG_INFO) << "Attempting to set display to " << width << "x" << height << "x" << _bpp << "...";
 	_screen = SDL_SetVideoMode(width, height, _bpp, _flags);
 	if (_screen == 0)
 	{
 		throw Exception(SDL_GetError());
 	}
+
+	if (isOpenGLEnabled()) 
+	{
+		glOutput.init(BASE_WIDTH, BASE_HEIGHT);
+		glOutput.linear = Options::getBool("useOpenGLSmoothing"); // setting from shader file will override this, though
+		glOutput.set_shader(CrossPlatform::getDataFile(Options::getString("useOpenGLShader")).c_str());
+		glOutput.setVSync(Options::getBool("vSyncForOpenGL"));
+	}
+
 	Log(LOG_INFO) << "Display set to " << _screen->w << "x" << _screen->h << "x" << (int)_screen->format->BitsPerPixel << ".";
-	setPalette(getPalette());
+	if (_screen->format->BitsPerPixel == 8)
+	{
+		setPalette(getPalette());
+	}
 }
 
 /**
@@ -682,6 +334,89 @@ double Screen::getXScale() const
 double Screen::getYScale() const
 {
 	return _scaleY;
+}
+
+/**
+ * Saves a screenshot of the screen's contents.
+ * @param filename Filename of the PNG file.
+ */
+void Screen::screenshot(const std::string &filename) const
+{
+	std::vector<unsigned char> image;
+	SDL_Color *palette = getPalette();
+
+	if (isOpenGLEnabled())
+	{
+		GLenum format = GL_RGB;
+
+		image.resize(getWidth() * getHeight() * 3, 0);
+		for (int y = 0; y < getHeight(); ++y)
+		{
+			glReadPixels(0, getHeight()-(y+1), getWidth(), 1, format, GL_UNSIGNED_BYTE, &(image[y*getWidth()*3]));
+		}
+		glErrorCheck();
+	} else
+	{
+		for (int y = 0; y < getHeight(); ++y)
+		{
+			for (int x = 0; x < getWidth(); ++x)
+			{
+				switch(_screen->format->BytesPerPixel)
+				{
+					Uint8 color;
+					Uint32 colors;
+				case 1:
+					color = ((Uint8 *)_screen->pixels)[y * _screen->pitch + x * _screen->format->BytesPerPixel];
+					image.push_back(palette[color].r);
+					image.push_back(palette[color].g);
+					image.push_back(palette[color].b);
+					break;
+				case 2:
+				case 3:
+				case 4:
+					colors = *(Uint32*)(((Uint8 *)_screen->pixels) + y * _screen->pitch + x * _screen->format->BytesPerPixel);
+					image.push_back((colors & _screen->format->Rmask) >> _screen->format->Rshift);
+					image.push_back((colors & _screen->format->Gmask) >> _screen->format->Gshift);
+					image.push_back((colors & _screen->format->Bmask) >> _screen->format->Bshift);
+					break;
+				default:
+					return; // not likely
+				}
+			}
+		}
+	}
+
+	unsigned error = lodepng::encode(filename, image, getWidth(), getHeight(), LCT_RGB);
+	if (error)
+	{
+		Log(LOG_ERROR) << "Saving to PNG failed: " << lodepng_error_text(error);
+	}
+}
+
+
+/** Check whether useHQXFilter is set in Options and a compatible resolution
+ *  has been selected.
+ */
+bool Screen::isHQXEnabled()
+{
+	int w = Options::getInt("displayWidth");
+	int h = Options::getInt("displayHeight");
+
+	if (Options::getBool("useHQXFilter") && (
+		(w == Screen::BASE_WIDTH * 2 && h == Screen::BASE_HEIGHT * 2) || 
+		(w == Screen::BASE_WIDTH * 3 && h == Screen::BASE_HEIGHT * 3) || 
+		(w == Screen::BASE_WIDTH * 4 && h == Screen::BASE_HEIGHT * 4)))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+bool Screen::isOpenGLEnabled()
+{
+	return Options::getBool("useOpenGL");
 }
 
 }
