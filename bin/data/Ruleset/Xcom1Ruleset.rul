@@ -3117,10 +3117,29 @@ ufos:
         - U_EXT02
         - U_WALL02
         - U_BITS
+        - UFOL83
       mapBlocks:
         - name: UFO_110
           width: 10
           length: 10
+        - name: ox_ufo1
+          width: 20
+          length: 20
+        - name: ox_ufo1b
+          width: 20
+          length: 20
+        - name: ox_ufo1c
+          width: 20
+          length: 20
+        - name: ox_ufo1d
+          width: 20
+          length: 20
+        - name: ox_ufo1e
+          width: 20
+          length: 20
+        - name: ox_ufo1f
+          width: 20
+          length: 20
   - type: STR_LARGE_SCOUT
     size: STR_SMALL
     sprite: 2
@@ -3139,8 +3158,45 @@ ufos:
         - U_EXT02
         - U_WALL02
         - U_BITS
+        - UFOL83
       mapBlocks:
         - name: UFO_120
+          width: 20
+          length: 20
+        - name: ox_ufo2a
+          width: 20
+          length: 20
+        - name: ox_ufo2b
+          width: 20
+          length: 20
+        - name: ox_ufo2c
+          width: 20
+          length: 20
+        - name: ox_ufo2d
+          width: 20
+          length: 20
+        - name: ox_ufo2e
+          width: 20
+          length: 20
+        - name: ox_ufo2f
+          width: 20
+          length: 20
+        - name: ox_ufo2g
+          width: 20
+          length: 20
+        - name: ox_ufo2h
+          width: 20
+          length: 20
+        - name: ox_ufo2i
+          width: 20
+          length: 20
+        - name: ox_ufo2j
+          width: 20
+          length: 20
+        - name: ox_ufo2k
+          width: 20
+          length: 20
+        - name: ox_ufo2l
           width: 20
           length: 20
   - type: STR_ABDUCTOR
@@ -3185,8 +3241,39 @@ ufos:
         - U_WALL02
         - U_DISEC2
         - U_BITS
+        - UFOL83
       mapBlocks:
         - name: UFO_130
+          width: 20
+          length: 20
+        - name: OX_ufo3a
+          width: 20
+          length: 20
+        - name: OX_ufo3b
+          width: 20
+          length: 20
+        - name: OX_ufo3c
+          width: 20
+          length: 20
+        - name: OX_ufo3d
+          width: 20
+          length: 20
+        - name: OX_ufo3e
+          width: 20
+          length: 20
+        - name: OX_ufo3f
+          width: 20
+          length: 20
+        - name: OX_ufo3g
+          width: 20
+          length: 20
+        - name: OX_ufo3h
+          width: 20
+          length: 20
+        - name: OX_ufo3i
+          width: 20
+          length: 20
+        - name: OX_ufo3k
           width: 20
           length: 20
   - type: STR_SUPPLY_SHIP
