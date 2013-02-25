@@ -1889,6 +1889,8 @@ void BattleUnit::heal(int part, int healAmount, int healthAmount)
 		return;
 	_fatalWounds[part] -= healAmount;
 	_health += healthAmount;
+	if (_health > getStats()->health)
+		_health = getStats()->health;
 }
 
 /**
@@ -1903,6 +1905,7 @@ void BattleUnit::painKillers ()
 	_needPainKiller = false;
 	int lostHealth = getStats()->health - _health;
 	_morale += lostHealth;
+	if (_morale > 100) _morale = 100;
 }
 
 /**
@@ -1913,6 +1916,8 @@ void BattleUnit::painKillers ()
 void BattleUnit::stimulant (int energy, int s)
 {
 	_energy += energy;
+	if (_energy > getStats()->stamina)
+		_energy = getStats()->stamina;
 	healStun (s);
 }
 
